@@ -11,8 +11,6 @@ const UserProfileMenu = lazy(() => import('./shared/UserProfileMenu'));
 
 const AuthLayout = (props) => {
 
-    console.log('render')
-
     const layoutContext = useContext(LayoutContext);
     return (
         <MasterLayout>
