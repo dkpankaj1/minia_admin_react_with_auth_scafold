@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers\Users;
 
-use App\Filters\ByLimit;
-use App\Filters\ByName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\User\RoleStoreRequest;
 use App\Http\Requests\User\RoleUpdateRequest;
@@ -11,7 +9,6 @@ use App\Models\PermissionGroup;
 use App\Traits\AuthorizationFilter;
 use Diglactic\Breadcrumbs\Breadcrumbs;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Pipeline;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Role;
 
@@ -25,24 +22,36 @@ class RoleController extends Controller
     {
         $this->authorizeOrFail('role.index');
 
-        $roleQuery = Role::query()->whereNotIn('id', [1])->withCount('users');
+        $limit = $request->get('limit', 10);
+        $searchTerm = $request->get('search');
 
-        $roles = Pipeline::send($roleQuery)->through([
-            ByName::class,
-        ])
-            ->thenReturn()
+        $roleQuery = Role::whereNotIn('id', [1])
+            ->when($searchTerm, function ($query, $searchTerm) {
+                $query->where('name', 'like', "%{$searchTerm}%");
+            })
             ->latest()
-            ->paginate(10)
+            ->paginate($limit)
             ->withQueryString();
+
+        $filteredRole = $roleQuery->getCollection()->transform(function ($role) {
+            return [
+                'id' => $role->id,
+                'name' => $role->name,
+                'users' => $role->users()->count(),
+                'created_at' => $role->created_at
+            ];
+        });
 
         return Inertia::render('RoleManagement/List', [
             'roles' => [
-                'collection' => $roles,
-                'count' => $roles->total(),
+                'data' => $filteredRole,
+                'links' => $roleQuery->linkCollection()->toArray(),
             ],
+            'roleCount' => Role::count(),
             'breadcrumb' => Breadcrumbs::generate('role.index')
         ]);
     }
+
 
 
     /**
@@ -89,7 +98,7 @@ class RoleController extends Controller
                 'rolePermissions' => $role->permissions()->pluck('name'),
                 'assignUser' => $role->users
             ],
-            'breadcrumb' => Breadcrumbs::generate('role.show',$role)
+            'breadcrumb' => Breadcrumbs::generate('role.show', $role)
         ]);
     }
 
@@ -104,7 +113,7 @@ class RoleController extends Controller
             'permissionGroup' => PermissionGroup::with('permissions')->get(),
             'role' => $role,
             'rolePermissions' => $role->permissions()->pluck('name'),
-            'breadcrumb' => Breadcrumbs::generate('role.edit',$role)
+            'breadcrumb' => Breadcrumbs::generate('role.edit', $role)
         ]);
     }
 

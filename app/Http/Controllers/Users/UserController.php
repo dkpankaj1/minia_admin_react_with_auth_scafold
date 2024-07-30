@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Users;
 
 use App\Enums\UserEnum;
-use App\Filters\ByName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\User\UserStoreRequest;
 use App\Http\Requests\User\UserUpdateRequest;
@@ -13,7 +12,6 @@ use Diglactic\Breadcrumbs\Breadcrumbs;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Pipeline;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Role;
 
