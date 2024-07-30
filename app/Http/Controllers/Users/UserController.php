@@ -7,7 +7,6 @@ use App\Filters\ByName;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\User\UserStoreRequest;
 use App\Http\Requests\User\UserUpdateRequest;
-use App\Http\Resources\User\UserResource;
 use App\Models\User;
 use App\Traits\AuthorizationFilter;
 use Diglactic\Breadcrumbs\Breadcrumbs;
@@ -27,22 +26,49 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $this->authorizeOrFail('user.index');
-
-        $users = Pipeline::send(User::query()->with('roles:name'))
-            ->through([ByName::class])
-            ->thenReturn()
-            ->latest()
-            ->paginate(10)
-            ->withQueryString();
-
+    
+        // Set default limit and override if provided in the request
+        $limit = $request->get('limit', 10);
+    
+        // Initialize user query
+        $userQuery = User::with('roles:name')->latest();
+    
+        // Apply search filter if present in the request
+        if ($request->has('search')) {
+            $searchTerm = "%{$request->search}%";
+            $userQuery->where(function ($query) use ($searchTerm) {
+                $query->where('name', 'like', $searchTerm)
+                      ->orWhere('email', 'like', $searchTerm);
+            });
+        }
+    
+        // Get paginated user data with the applied limit
+        $userData = $userQuery->paginate($limit)->withQueryString();
+    
+        // Transform user data
+        $filteredUser = $userData->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->roles->first()->name ?? 'no role', // Access roles directly
+                'is_active' => $user->is_active,
+                'created_at' => $user->created_at
+            ];
+        });
+    
+        // Return response with necessary data
         return Inertia::render('User/List', [
             'users' => [
-                'collection' => UserResource::collection($users),
-                'count' => User::count(),
+                'data' => $filteredUser,
+                'links' => $userData->linkCollection()->toArray(), // Use links() method for pagination links
             ],
+            'userCount' => User::count(),
             'breadcrumb' => Breadcrumbs::generate('user.index')
         ]);
     }
+    
+
 
 
     /**
@@ -97,7 +123,7 @@ class UserController extends Controller
             'user' => User::with([
                 'roles',
                 'loginHistories' => function ($query) {
-                    $query->orderBy('login_time','DESC')->take(10);
+                    $query->orderBy('login_time', 'DESC')->take(10);
                 }
             ])->where('id', $user->id)->first(),
             'breadcrumb' => Breadcrumbs::generate('user.show', $user)
